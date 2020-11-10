@@ -1,3 +1,6 @@
 *.log
 *.lock
 *.pyc
+node_modules
+.env
+__pycache__

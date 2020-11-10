@@ -1,0 +1,19 @@
+{% extends 'base.html.j2' %}
+
+{% block header %}
+<h1>{% block title %}Register{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<p>
+  We need only basic information for your account. Passwords require
+  a capital leter, a number, and a symbol. First and last name need
+  to be capitalized. You need to be atleast 16 or over to register.
+  We do not restrict access to users in specific countries. We record
+  some information for legal and statistical purposes only. You will
+  be allowed to change any of this information later from options. By
+  filling out this form and signing up, you are accepting to our
+  terms of service and privacy policy.
+</p>
+{{ getUserForm(nonce, filled, errors)|safe }}
+{% endblock %}

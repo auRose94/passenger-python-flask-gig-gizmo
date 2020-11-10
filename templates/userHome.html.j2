@@ -1,0 +1,9 @@
+{% extends 'base.html.j2' %}
+
+{% block header %}
+  <h1>{% block title %}{{user.firstName}}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<p>Hello {{user.firstName}}!</p>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html.j2' %} {% block header %}
+<h1>{% block title %}{{_("All Gigs")}}{% endblock %}</h1>
+{% endblock %} {% block content %}
+<table 
+    class="bg-primary text-white"
+    id="table"
+    data-id-field="_id"
+    data-toggle="table"
+    data-height="460"
+    data-url="/gig/list.json"
+    data-response-handler="tableResponseHandler"
+    data-search="true"
+    data-side-pagination="server"
+    data-pagination="true"
+    data-show-extended-pagination="true"
+    data-show-refresh="true"
+    data-show-toggle="true"
+    data-show-columns="true"
+    data-click-to-select="true"
+    data-show-columns-toggle-all="true"
+    data-multiple-select-row="true">
+    <thead>
+        <tr>
+            <th data-checkbox="true"></th>
+            <th data-field="bands">{{_("Bands")}}</th>
+            <th data-field="venue">{{_("Venue")}}</th>
+            <th data-field="start">{{_("Start")}}</th>
+            <th data-field="stop">{{_("Stop")}}</th>
+            <th data-field="location.address1">{{_("Address 1")}}</th>
+            <th data-field="updated">{{_("Updated")}}</th>
+            <th data-field="updated">{{_("Created")}}</th>
+        </tr>
+    </thead>
+</table>
+{% endblock %}

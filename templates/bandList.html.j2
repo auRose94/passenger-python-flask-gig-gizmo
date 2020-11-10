@@ -1,0 +1,37 @@
+{% extends 'base.html.j2' %} {% block header %}
+<h1>{% block title %}{{_("All Bands")}}{% endblock %}</h1>
+{% endblock %} {% block content %}
+<table 
+    class="bg-primary text-white"
+    id="table"
+    data-id-field="_id"
+    data-toggle="table"
+    data-height="460"
+    data-url="/band/list.json"
+    data-response-handler="tableResponseHandler"
+    data-search="true"
+    data-side-pagination="server"
+    data-pagination="true"
+    data-show-extended-pagination="true"
+    data-show-refresh="true"
+    data-show-toggle="true"
+    data-show-columns="true"
+    data-click-to-select="true"
+    data-show-columns-toggle-all="true"
+    data-multiple-select-row="true">
+    <thead>
+        <tr>
+            <th data-checkbox="true"></th>
+            <th data-field="name" data-sortable="true">{{_("Name")}}</th>
+            <th data-field="perma" data-sortable="true" data-visible="false">{{_("Permalink")}}</th>
+            <th data-field="url" data-sortable="true" data-visible="false">{{_("Website")}}</th>
+            <th data-field="location.address1" data-sortable="true" data-visible="false">{{_("Address 1")}}</th>
+            <th data-field="location.country" data-sortable="true" data-visible="false">{{_("Country")}}</th>
+            <th data-field="location.zip" data-sortable="true">{{_("ZIP")}}</th>
+            <th data-field="tags" data-visible="false">{{_("Tags")}}</th>
+            <th data-field="updated" data-sortable="true">{{_("Updated")}}</th>
+            <th data-field="created" data-sortable="true">{{_("Created")}}</th>
+        </tr>
+    </thead>
+</table>
+{% endblock %}

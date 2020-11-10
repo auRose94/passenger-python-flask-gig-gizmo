@@ -1,0 +1,10 @@
+{% extends 'base.html.j2' %}
+
+{% block header %}
+  <h1>{% block title %}{{_("Server Response 404!")}}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<h1>{{_("Page not found!")}}</h1>
+<p>{{_("For whatever reason the page couldn't be found. Make sure the URL you have is correct.")}}</p>
+{% endblock %}

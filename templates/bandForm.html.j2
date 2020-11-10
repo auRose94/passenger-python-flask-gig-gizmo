@@ -1,0 +1,14 @@
+
+{% for error in errors %}
+<div class="alert alert-danger" role="alert">{{ error }}</div>
+{% endfor %}
+
+<form method="post">
+  <div class="form-row">
+    <div class="form-group col-md-5">
+      <label for="name">Name</label>
+      <input type="text" class="form-control" name="name" id="name" required>
+    </div>
+  </div>
+  <input type="submit" value="Create Band" class="btn btn-primary">
+</form>

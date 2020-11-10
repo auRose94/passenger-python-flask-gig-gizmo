@@ -1,0 +1,65 @@
+
+{% for error in errors %}
+<div class="alert alert-danger" role="alert">{{ error }}</div>
+{% endfor %}
+
+<form method="post">
+  <input type="hidden" name="nonce" value="{{form['nonce']}}">
+  <div class="form-row">
+    <div class="form-group col-md-4"> 
+      <label for="name">Name</label>
+      <input type="text" class="form-control" name="name" id="name" required>
+    </div>
+    <div class="form-group col-md-4">
+      <label for="email">Email</label>
+      <input type="email" class="form-control" name="email" id="email" required autocomplete="email">
+    </div>
+    <div class="form-group col-md-4">
+      <label for="phone">Phone</label>
+      <input type="tel" class="form-control" name="phone" id="phone" required autocomplete="tel">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-6"> 
+      <label for="perma">Permalink</label>
+      <input type="text" class="form-control" name="perma" id="perma" required>
+    </div>
+    <div class="form-group col-md-6">
+      <label for="url">Website</label>
+      <input type="url" class="form-control" name="url" id="url" required autocomplete="url">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-4">
+      <label for="address1">Address 1</label>
+      <input type="text" class="form-control" name="location.address1" id="address1" required autocomplete="address-line1">
+    </div>
+    <div class="form-group col-md-4">
+      <label for="address2">Address 2</label>
+      <input type="text" class="form-control" name="location.address2" id="address2" autocomplete="address-line2">
+    </div>
+    <div class="form-group col-md-4">
+      <label for="country">Country</label>
+      <select type="text" class="form-control" name="location.country" id="country" required autocomplete="country">
+        {% for (code, country) in getCountries() %}
+        <option value="{{code}}" {% if code == "US" %} selected="true" {% endif %}>{{country}}</option>
+        {% endfor%}
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-4">
+      <label for="state">State/Province/Region</label>
+      <input type="text" class="form-control" name="location.state" id="state" required autocomplete="address-level1">
+    </div>
+    <div class="form-group col-md-5">
+      <label for="city">City</label>
+      <input type="text" class="form-control" name="location.city" id="city" required autocomplete="address-level2">
+    </div>
+    <div class="form-group col-md-3">
+      <label for="zip">Postal/ZIP</label>
+      <input type="text" class="form-control" name="location.zip" id="zip" required autocomplete="postal-code">
+    </div>
+  </div>
+  <input type="submit" value="Create Venue" class="btn btn-primary">
+</form>

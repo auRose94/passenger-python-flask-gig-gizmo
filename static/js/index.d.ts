@@ -1,0 +1,9 @@
+import "bootstrap/scss/bootstrap.scss";
+import "./style.scss";
+import "@fortawesome/fontawesome-free/scss/fontawesome.scss";
+import "@fortawesome/fontawesome-free/scss/regular.scss";
+import "@fortawesome/fontawesome-free/scss/solid.scss";
+import "@fortawesome/fontawesome-free/scss/v4-shims.scss";
+import "bootstrap";
+import "popper.js";
+//# sourceMappingURL=index.d.ts.map

@@ -1,0 +1,50 @@
+<!doctype html>
+
+<head>
+	<title>{% block title %}{% endblock %} - GigGizmo</title>
+	<link rel="shortcut icon" href="{{url_for('static', filename='/images/logo_white.svg')}}" type="image/svg+xml">
+	<link rel="shortcut icon" href="{{url_for('static', filename='/images/favicon.ico')}}" type="image/x-icon">
+	<script src="{{url_for('static', filename = '/js/index%s.js' % perfExtension())}}"></script>
+	<script src="{{url_for('static', filename = '/js/vendors%s.js' % perfExtension())}}"></script>
+	{% block postHeader %}{% endblock %}
+</head>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark position-fixed fixed-top">
+	<a class="navbar-brand" href="/">
+		<img srcset="{{url_for('static', filename='/images/logo_white.png')}} 32w, {{url_for('static', filename='/images/logo_white.svg')}}" width="32" height="32" />
+		GigGizmo
+	</a>
+	<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav"
+		aria-expanded="false" aria-label="Toggle navigation">
+		<span class="navbar-toggler-icon"></span>
+	</button>
+	<div class="collapse navbar-collapse" id="navbarNav">
+		<ul class="navbar-nav mr-auto">
+			{% for item in getNavItems() %}
+			{{item.render()|safe}}
+			{% endfor %}
+		</ul>
+	</div>
+</nav>
+
+<div id="bg">
+	{% for item in getBackgroundImages() %}
+	<div {{item.properties()|safe}}></div>
+	{% endfor %}
+</div>
+<section>
+	<div class="card text-white bg-dark content">
+		{% for (category, message) in get_flashed_messages(with_categories=True) %}
+		{% if message != None %}
+		<div class="alert alert-{{category}}" role="alert">{{ message }}</div>
+		{% endif %}
+		{% endfor %}
+		<div class="card-header">
+			{% block header %}{% endblock %}
+		</div>
+		<div class="card-body">
+			<div class="card-text">
+				{% block content %}{% endblock %}
+			</div>
+		</div>
+	</div>
+</section>
