@@ -1,8 +1,7 @@
 
 from flask.app import Flask
-from db import Model, Database, devListJSON, devSetResponse
+from werkzeug.datastructures import MultiDict
 from flask import render_template, request, session, redirect, url_for, flash
-import os
 from datetime import *
 from dateutil.parser import *
 from dateutil.relativedelta import *
@@ -10,114 +9,49 @@ from flask_babel import gettext as _
 from user import User
 from venue import Venue
 from band import Band
-from copy import Error
-from location import Location
 from typing import *
+import mongoengine as me
 
-MissingVenue = Error(_("Missing venue!"))
-MissingLocation = Error(_("Missing location from venue!"))
-MissingStart = Error(_("Missing start time and date!"))
-MissingStop = Error(_("Missing stop time and date!"))
-
-InvalidInfo = Error(_("Invalid info!"))
-InvalidBands = Error(_("Invalid bands!"))
-InvalidOwners = Error(_("Invalid owners!"))
-
-class Gig(Model):
-
-    def testVenue(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingVenue)
-
-    def testLocation(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingVenue)
-
-    def testBands(form: Any, value: Any, errors: list):
-        # TODO: Check if all bands exist
-        if not isinstance(value, list):
-            errors.append(InvalidBands)
-
-    def testOwners(form: Any, value: Any, errors: list):
-        # TODO: Check if all bands exist
-        if not isinstance(value, list):
-            errors.append(InvalidOwners)
-
-    def testStart(form: Any, value: Any, errors: list):
-        # TODO: Parse date-time format
-        if not isinstance(value, str):
-            errors.append(MissingStart)
-
-    def testStop(form: Any, value: Any, errors: list):
-        # TODO: Parse date-time format
-        if not isinstance(value, str):
-            errors.append(MissingStop)
-
-    def testInfo(form: Any, value: Any, errors: list):
-        # TODO: check if valid html
-        if not isinstance(value, str):
-            errors.append(InvalidInfo)
-
-    venue = Model.newProp("venue", None, testVenue, "The id of venue")
-    location = Model.newProp("location", None, testLocation, "Venue location")
-    bands = Model.newProp("bands", [], testBands, "The list of band ids")
-    owners = Model.newProp("owners", [], testOwners, "Owners of the bands and venues")
-    start = Model.newProp("start", None, testStart, "The starting time")
-    stop = Model.newProp("stop", None, testStop, "The stopping time")
-    info = Model.newProp("info", "", testInfo, "HTML details on the event")
-
-    def resolve(input: Any):
-        return Model.resolve(Gig, input)
-        
-    def setResponse(self, include, resp):
-        return devSetResponse({
-            "venue": Venue,
-            "bands": [Band],
-            "owners": [User],
-            "location": Location
-        })(self, include, resp)
-
-    def __init__(self, data: Any):
-        super().__init__(Model.setResolve(data, {
-            "location": Location
-        }))
-
-    def findOne(criteria: Any):
-        return Database.main.findOne(Gig, criteria)
-
-    def findMany(criteria: Any):
-        return Database.main.findMany(Gig, criteria)
+class Gig(me.Document):
+    venue = me.LazyReferenceField(
+        "Venue", passthrough=True, reverse_delete_rule=me.NULLIFY)
+    location = me.LazyReferenceField(
+        "Location", passthrough=True, reverse_delete_rule=me.NULLIFY)
+    bands = me.ListField(me.LazyReferenceField("Band", passthrough=True, reverse_delete_rule=me.NULLIFY))
+    owners = me.ListField(me.ReferenceField("User", passthrough=True, reverse_delete_rule=me.NULLIFY))
+    start = me.DateTimeField()
+    stop = me.DateTimeField()
+    info = me.StringField(required=True, max_length=1024*8)
 
     def renderCard(self, bands: Dict[str, Band], venue: Venue):
         return render_template("gigCard.html.j2", gig=self, bands=bands, venue=venue)
 
-    def renderDelete(user: User, gigs: list, bands: Dict[str, Band], venues: Dict[str, Venue], nonce: str):
+    def renderDelete(user: User, nonce: str, gigs: list, bands: Dict[str, Band], venues: Dict[str, Venue]):
         return render_template("gigDelete.html.j2", user=user, gigs=gigs, bands=bands, venues=venues, nonce=nonce)
 
-    def renderEdit(user: User, gig: Any, form: Any, errors: list):
-        return render_template("gigEdit.html.j2", user=user, gig=gig, form=form, errors=errors)
+    def renderEdit(user: User, nonce: str, gig: Any, form: Any, errors: list):
+        return render_template("gigEdit.html.j2", user=user, gig=gig, form=form, errors=errors, nonce=nonce)
 
-    def renderForm(user: User, form: Any, errors: list):
-        return render_template("gigForm.html.j2", user=user, form=form, errors=errors)
+    def renderForm(user: User, nonce: str, form: Any, errors: list):
+        return render_template("gigForm.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderList(user: User, gigs: list, bands: Dict[str, Band], venues: Dict[str, Venue]):
         return render_template("gigList.html.j2", user=user, gigs=gigs, bands=bands, venues=venues)
 
-    def renderNew(user: User, form: Any, errors: list):
-        return render_template("gigNew.html.j2", user=user, form=form, errors=errors)
+    def renderNew(user: User, nonce: str, form: Any, errors: list):
+        return render_template("gigNew.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderPage(user: User, gig: Any, bands: Dict[str, Band], venue: Venue):
         return render_template("gigPage.html.j2", user=user, gig=gig, bands=bands, venue=venue)
 
     def setupApp(app: Flask):
+
         @app.route("/gig/<id>")
         def gigPage(id):
-            user = None
+            user: User or None = None
             if "user" in session:
                 user = session["user"]
-            gig = Gig.findOne({"_id": id})
+            gig = Gig.object({"_id": id})
             if gig is None:
                 return redirect(url_for('indexGET'))
             return Gig.renderPage(user, gig)
@@ -125,103 +59,107 @@ class Gig(Model):
         @app.route("/gig/<id>/edit", methods=['POST', 'GET'])
         def editGig(id):
             user = None
-            form = {}
-            errors = []
+            f = {}
+            errors = {}
             if "user" in session:
-                user = session["user"]
-                gig = Gig.findOne({"_id": id, "owner": user.id})
-                if gig is None:
-                    return redirect(url_for('listGig'))
-                if request.method == "POST":
-                    form = request.form
-                    if form["nonce"] != user.nonce:
-                        flash(_("Bad nonce!"), "danger")
-                    else:
-                        del user.nonce
-                        gig.apply(form)
-                        if len(gig.errors) == 0:
-                            gig.save()
+                user: User or None = session["user"]
+                if isinstance(user, User):
+                    nonce = user.getNonce()
+                    gig: Gig or None = Gig.object({"_id": id, "owners": user.id})
+                    if gig is None:
+                        return redirect(url_for('listGig'))
+                    if request.method == "POST":
+                        f = MultiDict(request.form.items(multi=True))
+                        for key, value in f.items(multi=True):
+                            user[key] = value
+                        if f["nonce"] != nonce:
+                            flash(_("Bad nonce!"), "danger")
                         else:
-                            errors.extend(gig.errors)
-                form["nonce"] = user.nonce
-                return Gig.renderEdit(user, gig, form, errors)
+                            user.delNonce()
+                            try:
+                                gig.validate()
+                            except me.ValidationError as err:
+                                errors[err.field_name] = err.message
+                            else:
+                                gig.save()
+                    return Gig.renderEdit(user, nonce, gig, f, errors)
             return redirect(url_for('login'))
 
         @app.route("/gig/list")
-        def listGig():
-            if "user" in session:
-                user = session["user"]
-                if user:
-                    gigs = Gig.findMany({"owner": user.id})
-                    bandIds = []
-                    venueIds = []
-                    for gig in gigs:
-                        if gig.venue not in venueIds:
-                            venueIds.append(gig.venue)
-                        for bid in gig.bands:
-                            if bid not in bandIds:
-                                bandIds.append(bid)
-                    bands = Band.findMany({"_id": bandIds})
-                    venues = Venue.findMany({"_id": venueIds})
-                    def ModelMap(item):
-                        return [item.id, item]
-                    bands = dict(map(ModelMap, bands))
-                    venues = dict(map(ModelMap, venues))
-                    return Gig.renderList(user, gigs, bands, venues)
-            return redirect(url_for('login'))
-
-        @app.route("/gig/list.json")
         def listGigJSON():
             if "user" in session:
                 user = session["user"]
                 if user:
-                    return devListJSON(user, request, Gig, [Gig, Band, Venue, Location])
+                    return Gig.renderList(user)
+            return redirect(url_for('login'))
+
+        @app.route("/gig/list.json")
+        def listGig():
+            if "user" in session:
+                user = session["user"]
+                if user:
+                    gigs: me.Document = Gig.select_related()
+                    limit = 0
+                    skip = 0
+                    text = None
+                    if "limit" in request.args and int(request.args["limit"]) > 0:
+                        limit = int(request.args["limit"])
+                    if "offset" in request.args and int(request.args["offset"]) > 0:
+                        skip = int(request.args["offset"])
+                    if "search" in request.args and request.args["search"] != "":
+                        text = request.args["search"]
+                    gigs.objects({"owners": user.id}).limit(limit).skip(0)
+                    resp = {}
+                    resp["total"] = len(gigs)
+                    resp["rows"] = gigs
+                    return resp, 200
             return redirect(url_for('login')), 401
 
         @app.route("/gig/delete")
         def deleteGig():
             if "user" in session:
                 nonce = None
-                user = session["user"]
-                if user:
-                    nonce = user.nonce
+                user: User or None = session["user"]
+                if isinstance(user, User):
+                    nonce = user.getNonce()
                     items = request.args["items"]
-                    gigs = Gig.findMany({"_id": items, "owner": user.id})
+                    gigs: List[Gig] = Gig.objects({"_id": items, "owners": user.id})
                     if request.method == "POST":
                         if request.form["nonce"] != nonce:
                             flash(_("Bad nonce!"), "danger")
                         else:
-                            del user.nonce
+                            user.delNonce()
                             for gig in gigs:
-                                gig.remove()
+                                gig.delete()
                             l = len(gigs)
                             if l > 1:
                                 flash(_("Removed %i items!" % l), "success")
                             else:
                                 flash(_("Removed item!"), "success")
                             return redirect(url_for('listGig'))
-                    return Gig.renderDelete(user, gigs, nonce)
+                    return Gig.renderDelete(user, nonce, gigs)
             return redirect(url_for('login'))
 
         @app.route('/gig/new', methods=['POST', 'GET'])
         def newGig():
             if "user" in session:
-                user = session["user"]
-                nonce = user.nonce
+                user: User = session["user"]
+                nonce = user.getNonce()
                 errors = []
-                form = {}
+                f = {}
                 if request.method == "POST":
-                    form = request.form
-                    if form["nonce"] == nonce:
-                        gig = Gig(form)
-                        if len(gig.errors) == 0:
-                            gig = Gig.register(gig)
+                    f = MultiDict(request.form.items(multi=True))
+                    if f.get("nonce") == nonce:
+                        user.delNonce()
+                        try:
+                            gig = Gig.register(f, user)
+                        except me.ValidationError as err:
+                            errors[err.field_name] = err.message
+                        else:
                             if gig:
                                 return redirect(url_for('gigPage', id=gig.id))
-                        else:
-                            errors.extend(gig.errors)
                     else:
                         flash(_("Bad nonce!"), "danger")
-                form["nonce"] = nonce
-                return Gig.renderNew(user, form, errors)
+                f["nonce"] = nonce
+                return Gig.renderNew(user, f, errors), 200
             return redirect(url_for('login'))

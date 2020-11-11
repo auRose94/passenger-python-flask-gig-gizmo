@@ -1,10 +1,10 @@
 from copy import Error
-from mongoengine.errors import ValidationError
-from mongoengine.queryset.base import CASCADE
+from location import Location
+from dateutil import relativedelta
+from flask import Flask
+from mongoengine import *
 from re import U
 from time import time
-from flask.app import Flask
-from jinja2.runtime import Undefined
 from password_strength.tests import Length, NonLetters, Numbers, Special, Uppercase
 from werkzeug.datastructures import MultiDict
 from flask import render_template, request, session, redirect, url_for, flash
@@ -12,11 +12,8 @@ from crypt import crypt
 from password_strength import PasswordPolicy
 from datetime import *
 from dateutil.parser import *
-from dateutil.relativedelta import *
 from flask_babel import gettext as _
-from location import Location
 from typing import *
-from config import dev
 import mongoengine as me
 from langs import LANGS
 
@@ -27,15 +24,9 @@ passwordMinSpecial = 1
 passwordMinNon = 1
 
 MissingPassword = Error(_("Missing password!"))
-MissingEmail = Error(_("Missing email!"))
 MissingBirthday = Error(_("Missing birthday!"))
-MissingUserType = Error(_("Missing userType!"))
 MissingPhone = Error(_("Missing phone!"))
-MissingLang = Error(_("Missing language!"))
 MissingFirstName = Error(_("Missing first name!"))
-MissingLastName = Error(_("Missing last name!"))
-MissingUserType = Error(_("Missing User Type ('userType')!"))
-MissingPronouns = Error(_("Missing pronouns!"))
 
 InvalidPasswordLength = Error(
     _("Password is too short (expected %i)!" % passwordMinLength))
@@ -48,9 +39,7 @@ InvalidPasswordSpecial = Error(
 InvalidPasswordNon = Error(
     _("Password is missing non-letter characters (expected %i)!" % passwordMinNon))
 
-InvalidEmail = Error(_("Invalid email!"))
 InvalidBirthday = Error(_("Invalid birthday!"))
-InvalidUserType = Error(_("Invalid userType!"))
 InvalidPhone = Error(_("Invalid international phone number"))
 
 BadCredentials = Error(_("Bad login credentials"))
@@ -125,7 +114,7 @@ class User(me.Document):
     middleName = me.StringField()
     lastName = me.StringField(required=True)
     location = me.LazyReferenceField(
-        "Location", passthrough=True, reverse_delete_rule=CASCADE)
+        "Location", passthrough=True, reverse_delete_rule=me.CASCADE)
     pronouns = me.StringField(
         default="they/them", choices=["they/them", "she/her", "he/him", "ve/ver", "xe/xer", "ze/hir"])
     gender = me.StringField(default="", choices=[
@@ -158,7 +147,7 @@ class User(me.Document):
                 ) + app.permanent_session_lifetime
                 session["created"] = time()
                 return True, user
-        return False, Undefined
+        return False, None
 
     def renderLogin(nonce: str, error: Any):
         return render_template("userLogin.html.j2", error=error, nonce=nonce)
@@ -265,7 +254,7 @@ class User(me.Document):
                     User.delNonce()
                     try:
                         user = User.register(f)
-                    except ValidationError as err:
+                    except me.ValidationError as err:
                         errors[err.field_name] = err.message
                     else:
                         if isinstance(user, User):
@@ -299,7 +288,7 @@ class User(me.Document):
                                 user[key] = value
                             try:
                                 user.validate()
-                            except ValidationError as err:
+                            except me.ValidationError as err:
                                 errors[err.field_name] = err.message
                             else:
                                 user.save()

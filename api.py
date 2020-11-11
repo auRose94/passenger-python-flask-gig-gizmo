@@ -9,8 +9,8 @@ from dateutil.relativedelta import *
 from flask_babel import gettext as _
 from user import User
 from copy import Error, error
-from upload import Upload
 from typing import *
+import mongoengine as me
 
 MissingName = Error(_("Missing name string!"))
 MissingLive = Error(_("Missing live boolean!"))
@@ -24,52 +24,17 @@ InvalidUser = Error(_("Invalid user!"))
 InvalidIcon = Error(_("Invalid icon!"))
 
 class API(Model):
-
-    def testName(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingName)
-
-    def testLive(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, bool):
-            errors.append(MissingLive)
-
-    def testEmail(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingEmail)
-
-    def testWebsite(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingWebsite)
-
-    def testHistory(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingHistory)
-
-    def testStats(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingStats)
-
-    def testSecret(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str):
-            errors.append(MissingSecret)
-
-    def testUser(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str) or not isinstance(value, User):
-            errors.append(InvalidUser)
-
-    def testIcon(form: Any, value: Any, errors: list):
-        # TODO: Check if venue exists
-        if not isinstance(value, str) or not isinstance(value, Upload) or not None:
-            errors.append(InvalidIcon)
-
+    name = me.StringField(required=True)
+    live = me.BooleanField(default=False)
+    email = me.EmailField(allow_utf8_user=True)
+    website = me.URLField()
+    history = me.ListField(me.DynamicEmbeddedDocument())
+    stats = me.DynamicEmbeddedDocument()
+    secret = me.StringField()
+    owners = me.ListField(me.ReferenceField("User", passthrough=True, reverse_delete_rule=me.NULLIFY))
+    icon = me.ImageField(size=(1024, 1024, True),
+                         thumbnail_size=(128, 128, True))
+                         
     name = Model.newProp("name", None, testName, "Name of the App")
     live = Model.newProp("live", False, testLive, "Should the API apply data?")
     email = Model.newProp("email", None, testEmail, "Email of the dev")
@@ -79,41 +44,6 @@ class API(Model):
     secret = Model.newProp("secret", None, testSecret, "Given to user")
     user = Model.newProp("user", None, testUser, "HTML details on the event")
     icon = Model.newProp("icon", None, testIcon, "Icon of the App")
-
-    def resolve(input: Any):
-        return Model.resolve(API, input)
-        
-    def setResponse(self: Model, user: Any, include: List[str or Type[Model]], resp: Dict = {}):
-        return devSetResponse({
-            "user": User,
-            "icon": Upload
-        })(self, user, include, resp)
-
-    def filter(self, user: Any) -> Any:
-        data = Model.filter(self, user)
-        if user is not User:
-            del data["email"]
-            del data["user"]
-            del data["history"]
-            del data["stats"]
-            del data["secret"]
-        elif user.id != self.user and not user.admin:
-            del data["email"]
-            del data["history"]
-            del data["stats"]
-            del data["secret"]
-        return data
-
-    def __init__(self, data: Any):
-        super().__init__(Model.setResolve(data, {
-            "icon": Upload
-        }))
-
-    def findOne(criteria: Any):
-        return Database.main.findOne(API, criteria)
-
-    def findMany(criteria: Any):
-        return Database.main.findMany(API, criteria)
 
     def renderCard(self):
         return render_template("apiCard.html.j2", api=self)

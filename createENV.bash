@@ -2,18 +2,20 @@
 #Finds Python, checks or installs .env, installs reqs.txt
 #Author: CoryNull(Cory Noll Crimmins-Golden)<cory190@live.com>
 
-py=false;
-for pyT in ["python", "python3", "python3.8"]; do
-  if [ ! command -v $pyT &> /dev/null ]; then
-    py=$pyT;
+pyInt=false;
+for pyT in "python" "python3" "python3.8"; do
+  if type "$pyT" &> /dev/null; then
+    echo "Found $pyT"
+    pyInt=$pyT;
+    break;
   fi
 done
 
-if [ py == false ]; then
+if [ ! type "$pyInt" &> /dev/null ]; then
   echo "Python not found"
 else
   if [ ! -d ".env" ]; then
-    py -m venv .env;
+    $pyInt -m venv .env;
   fi
 
   if [ -d ".env" ]; then

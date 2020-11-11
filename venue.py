@@ -1,19 +1,11 @@
 
-from flask.app import Flask
-from mongoengine.document import Document
-from mongoengine.errors import ValidationError
-from mongoengine.queryset.base import CASCADE
-import pymongo
+from flask import Flask
 from werkzeug.datastructures import MultiDict
 from flask import render_template, request, session, redirect, url_for, flash
-import os
 from datetime import *
 from dateutil.parser import *
-from dateutil.relativedelta import *
 from flask_babel import gettext as _
 from user import User
-from location import Location
-from upload import Upload
 from typing import *
 import mongoengine as me
 
@@ -24,7 +16,7 @@ class Venue(me.Document):
     email = me.EmailField(required=True)
     phone = me.EmailField(required=True)
     location = me.LazyReferenceField(
-        "Location", passthrough=True, reverse_delete_rule=CASCADE)
+        "Location", passthrough=True, reverse_delete_rule=me.CASCADE)
     desc = me.StringField(required=True, max_length=1024*8)
     short = me.StringField(required=True, max_length=128)
     tags = me.ListField(me.StringField(min_length=3))
@@ -32,7 +24,7 @@ class Venue(me.Document):
                          thumbnail_size=(128, 128, True))
     photos = me.ListField(me.ImageField(size=(2048, 2048, False),
                          thumbnail_size=(512, 512, False)))
-    owners = me.ListField(me.ReferenceField(User))
+    owners = me.ListField(me.ReferenceField("User", passthrough=True, reverse_delete_rule=me.NULLIFY))
     hide = me.BooleanField(default=False)
 
     meta = {'indexes': [
@@ -46,19 +38,19 @@ class Venue(me.Document):
         return render_template("venueCard.html.j2", venue=venue)
 
     def renderDelete(user: User, nonce: str, venues: Any):
-        return render_template("venueDelete.html.j2", user=user, venues=venues)
+        return render_template("venueDelete.html.j2", user=user, venues=venues, nonce=nonce)
 
     def renderEdit(user: User, nonce: str, venue: Any):
-        return render_template("venueEdit.html.j2", user=user, venue=venue)
+        return render_template("venueEdit.html.j2", user=user, venue=venue, nonce=nonce)
 
     def renderForm(user: User, nonce: str, form: Any, errors: list):
-        return render_template("venueForm.html.j2", user=user, form=form, errors=errors)
+        return render_template("venueForm.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderList(user: User, venues: list):
         return render_template("venueList.html.j2", user=user, venues=venues)
 
     def renderNew(user: User, nonce: str, form: Any, errors: list):
-        return render_template("venueNew.html.j2", user=user, form=form, errors=errors)
+        return render_template("venueNew.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderPage(user: User, venue: Any):
         return render_template("venuePage.html.j2", user=user, venue=venue)
@@ -103,7 +95,7 @@ class Venue(me.Document):
                             user.delNonce()
                             try:
                                 venue.validate()
-                            except ValidationError as err:
+                            except me.ValidationError as err:
                                 errors[err.field_name] = err.message
                             else:
                                 venue.save()
@@ -123,7 +115,7 @@ class Venue(me.Document):
             if "user" in session:
                 user = session["user"]
                 if user:
-                    venues: Document = Venue.select_related()
+                    venues: me.Document = Venue.select_related()
                     limit = 0
                     skip = 0
                     text = None
@@ -178,7 +170,7 @@ class Venue(me.Document):
                         user.delNonce()
                         try:
                             venue = Venue.register(f, user)
-                        except ValidationError as err:
+                        except me.ValidationError as err:
                             errors[err.field_name] = err.message
                         else:
                             if venue:

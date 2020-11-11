@@ -1,7 +1,7 @@
 
 from typing import Any, Dict, Tuple
-from country_list.country_list import countries_for_language
-from flask.globals import session
+from country_list import countries_for_language
+from flask_session import session
 from flask_babel import gettext as _
 from form import Form
 from langs import LANGS
