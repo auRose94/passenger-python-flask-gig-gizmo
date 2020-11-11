@@ -1,26 +1,24 @@
 from copy import Error
+from mongoengine.errors import ValidationError
+from mongoengine.queryset.base import CASCADE
 from re import U
 from time import time
 from flask.app import Flask
 from jinja2.runtime import Undefined
 from password_strength.tests import Length, NonLetters, Numbers, Special, Uppercase
-import pymongo
-from pymongo.operations import IndexModel
 from werkzeug.datastructures import MultiDict
-from db import Model, Database, devSetResponse
 from flask import render_template, request, session, redirect, url_for, flash
 from crypt import crypt
-from validate_email import validate_email
 from password_strength import PasswordPolicy
-import os
 from datetime import *
 from dateutil.parser import *
 from dateutil.relativedelta import *
 from flask_babel import gettext as _
 from location import Location
-from upload import Upload
 from typing import *
 from config import dev
+import mongoengine as me
+from langs import LANGS
 
 passwordMinLength = 8
 passwordMinUpperCaser = 1
@@ -53,6 +51,7 @@ InvalidPasswordNon = Error(
 InvalidEmail = Error(_("Invalid email!"))
 InvalidBirthday = Error(_("Invalid birthday!"))
 InvalidUserType = Error(_("Invalid userType!"))
+InvalidPhone = Error(_("Invalid international phone number"))
 
 BadCredentials = Error(_("Bad login credentials"))
 BadNonce = Error(_("Bad nonce!"))
@@ -66,149 +65,87 @@ passPolicy = PasswordPolicy.from_names(
     nonletters=passwordMinNon,
 )
 
-
-class User(Model):
-    def testPassword(form: Any, value: Any, errors: list):
+class User(me.Document):
+    def testPassword(value: Any):
         if not isinstance(value, str):
-            errors.append(MissingPassword)
+            raise(MissingPassword)
         else:
             errs = passPolicy.test(value)
             for err in errs:
                 if isinstance(err, Length):
-                    errors.append(InvalidPasswordLength)
+                    raise(InvalidPasswordLength)
                 elif isinstance(err, Uppercase):
-                    errors.append(InvalidPasswordUpper)
+                    raise(InvalidPasswordUpper)
                 elif isinstance(err, Numbers):
-                    errors.append(InvalidPasswordNumbers)
+                    raise(InvalidPasswordNumbers)
                 elif isinstance(err, Special):
-                    errors.append(InvalidPasswordSpecial)
+                    raise(InvalidPasswordSpecial)
                 elif isinstance(err, NonLetters):
-                    errors.append(InvalidPasswordSpecial)
+                    raise(InvalidPasswordSpecial)
 
-    def testEmail(form: Any, value: Any, errors: list):
-        if not isinstance(value, str):
-            errors.append(MissingEmail)
-        elif not validate_email(value, verify=not dev):
-            errors.append(InvalidEmail)
-
-    def testBirthday(form: Any, value: Any, errors: list):
-        if not isinstance(value, str):
-            errors.append(MissingBirthday)
-        else:
+    def testBirthday(value: Any):
+        bdTime = None
+        if not isinstance(value, (str, int, float, datetime)):
+            raise(MissingBirthday)
+        elif isinstance(value, str):
             bdTime = isoparse(value)
-            bdMin = datetime.now()+relativedelta(years=-18)
-            if bdMin < bdTime:
-                errors.append(InvalidBirthday)
+        elif isinstance(value, datetime):
+            bdTime = value
+        elif isinstance(value, float or int):
+            bdTime = datetime.fromtimestamp(value)
+        bdMin = datetime.now()+relativedelta(years=-18)
+        if bdMin < bdTime:
+            raise(InvalidBirthday)
 
-    def testUserType(form: Any, value: Any, errors: list):
-        if not isinstance(value, str):
-            errors.append(MissingUserType)
-        elif [
-            "patron",
-            "musician",
-            "bandMember",
-            "bandManager",
-            "venueOwner",
-            "venueManager",
-            "marketing",
-            "all"
-        ].index(value) == -1:
-            errors.append(InvalidUserType)
-
-    def testPhone(form: Any, value: Any, errors: list):
+    def testPhone(value: Any):
         # TODO: Parse phone number
         if not isinstance(value, str):
-            errors.append(MissingPhone)
+            raise(MissingPhone)
+        if value.count("+") != 1:
+            raise(InvalidPhone)
 
-    def testLang(form: Any, value: Any, errors: list):
-        # TODO: Find language from list
-        if not isinstance(value, str):
-            errors.append(MissingLang)
+    admin = me.BooleanField(default=False)
+    userType = me.StringField(required=True, choices=[
+        "patron",
+        "musician",
+        "bandMember",
+        "bandManager",
+        "venueOwner",
+        "venueManager",
+        "marketing",
+        "all"
+    ])
+    email = me.EmailField(required=True, unique=True, allow_utf8_user=True)
+    password = me.StringField(required=True, validation=testPassword)
+    salt = me.StringField(default=None)
+    phone = me.StringField(required=True, unique=True, validation=testPhone)
+    birthday = me.DateField(required=True, validation=testBirthday)
+    lang = me.StringField(default="en", choices=list(LANGS.keys()))
+    firstName = me.StringField(required=True)
+    middleName = me.StringField()
+    lastName = me.StringField(required=True)
+    location = me.LazyReferenceField(
+        "Location", passthrough=True, reverse_delete_rule=CASCADE)
+    pronouns = me.StringField(
+        default="they/them", choices=["they/them", "she/her", "he/him", "ve/ver", "xe/xer", "ze/hir"])
+    gender = me.StringField(default="", choices=[
+                            "", "non-binary", "female", "male"])
+    icon = me.ImageField(size=(1024, 1024, True),
+                         thumbnail_size=(128, 128, True))
+    info = me.StringField()
 
-    def testFirstName(form: Any, value: Any, errors: list):
-        if not isinstance(value, str):
-            errors.append(MissingFirstName)
+    meta = {'indexes': [
+        {'fields': ["$email", "$phone", '$firstName', "$middleName", "$lastName", "$info"],
+         'default_language': "english",
+         'weights': {'email': 10, 'phone': 10, 'info': 5, 'firstName': 2, 'middleName': 2, 'lastName': 2}
+         }
+    ]}
 
-    def testLastName(form: Any, value: Any, errors: list):
-        if not isinstance(value, str):
-            errors.append(MissingLastName)
-
-    def testPronouns(form: Any, value: Any, errors: list):
-        # TODO: Check pronouns from list
-        if not isinstance(value, str):
-            errors.append(MissingPronouns)
-
-    def testLocation(form: Any, value: Any, errors: list):
-        loc = Location(value)
-        if len(loc.errors) > 0:
-            errors.extend(loc.errors)
-
-    admin = Model.newProp(
-        "admin", False, doc="Is an admin", hide=True)
-    userType = Model.newProp(
-        "userType", "all", testUserType, "What type of user")
-    email = Model.newProp(
-        "email", test=testEmail, doc="Email of user", hide=True)
-    password = Model.newProp(
-        "password", test=testPassword, doc="Hashed and salted password", hide=True)
-    salt = Model.newProp(
-        "salt", doc="The unique hash part for password test", hide=True)
-    phone = Model.newProp(
-        "phone", test=testPhone, doc="Telephone phone number of user")
-    birthday = Model.newProp(
-        "birthday", test=testBirthday, doc="Birthday of user")
-    lang = Model.newProp(
-        "lang", "en", testLang, "Language code the user prefers")
-    firstName = Model.newProp(
-        "firstName", test=testFirstName, doc="Formal name of user")
-    middleName = Model.newProp(
-        "middleName", "", doc="The middle name of the user")
-    lastName = Model.newProp(
-        "lastName", test=testLastName, doc="Family name of user")
-    location = Model.newProp(
-        "location", test=testLocation, doc="Location id in the database")
-    pronouns = Model.newProp(
-        "pronouns", "they/them", testPronouns, "Reference, for user convenience and stats")
-    gender = Model.newProp(
-        "gender", "", doc="Reference, for user convenience and stats")
-    icon = Model.newProp(
-        "icon", doc="User avatar")
-    info = Model.newProp(
-        "info", "", doc="HTML page description of user")
-
-    def resolve(input: Any):
-        return Model.resolve(User, input)
-
-    def setResponse(self: Model, user: Any, include: List[str or Type[Model]], resp: Dict = {}):
-        return devSetResponse({
-            "location": Location,
-            "icon": Upload
-        })(self, user, include, resp)
-
-    def filter(self, user: Any) -> Any:
-        data = Model.filter(self, user)
-        del data["password"]
-        del data["salt"]
-        if not isinstance(user, User) or (user.id != self.id and not user.admin):
-            del data["email"]
-            del data["phone"]
-            del data["admin"]
-        return data
-
-    def __init__(self, data: Any):
-        super().__init__(Model.setResolve(data, {
-            "location": Location,
-            "icon": Upload
-        }))
-
-    def findOne(criteria: Any):
-        return Database.main.findOne(User, criteria)
-
-    def findMany(criteria: Any):
-        return Database.main.findMany(User, criteria)
-
-    def login(app: Flask, email: str, password: str, rememberMe: bool = False):
-        user = User.findOne({"email": email})
+    def login(app: Flask, form: Dict = {}):
+        email = form.get("email", "")
+        password = form.get("password", "")
+        rememberMe = form.get("rememberMe", False)
+        user: User or None = User.object({"email": email})
         if isinstance(user, User):
             hash = crypt(password, user.salt)
             if hash == user.password:
@@ -244,12 +181,9 @@ class User(Model):
     def renderSignUp(nonce: str, form: dict, errors: dict):
         return render_template("userSignup.html.j2", nonce=nonce, filled=form, errors=errors)
 
-    def register(form: Any):
-        user = None
-        if isinstance(form, User):
-            user = form
-        elif isinstance(form, dict):
-            user = User(form)
+    def register(form: Dict):
+        user = User(form)
+        user.validate()
         salt = crypt(str(time()))
         hash = crypt(form["password"], salt)
         user.password = hash
@@ -274,16 +208,6 @@ class User(Model):
         return nonce
 
     def setupApp(app: Flask):
-        col = Database.main.getCollection(User)
-        col.create_index([
-            ('firstName', pymongo.TEXT),
-            ('middleName', pymongo.TEXT),
-            ('lastName', pymongo.TEXT),
-            ('email', pymongo.TEXT),
-            ('phone', pymongo.TEXT),
-            ('info', pymongo.TEXT),
-        ], name="userIndexModel")
-
         @app.route("/home")
         def userHome():
             if "user" in session:
@@ -301,7 +225,7 @@ class User(Model):
                     if request.method == "POST":
                         if nonce == request.form.get("nonce"):
                             user.delNonce()
-                            done = user.remove()
+                            done = user.delete()
                             if done:
                                 flash(_("Account deleted, Goodbye, %s!" %
                                         user.firstName), "primary")
@@ -319,8 +243,7 @@ class User(Model):
                 f = MultiDict(request.form.items(multi=True))
                 if f.get("nonce") == nonce:
                     User.delNonce()
-                    loggedIn, user = User.login(
-                        app, f["email"], f["password"], f["rememberMe"])
+                    loggedIn, user = User.login(app, f)
                     if loggedIn:
                         flash(_("Welcome %s!" % user.firstName), "success")
                         return redirect(url_for('userHome'), 301)
@@ -340,9 +263,11 @@ class User(Model):
                 f = MultiDict(request.form.items(multi=True))
                 if f.get("nonce") == nonce:
                     User.delNonce()
-                    user = User(f)
-                    if user.valid():
-                        user = User.register(user)
+                    try:
+                        user = User.register(f)
+                    except ValidationError as err:
+                        errors[err.field_name] = err.message
+                    else:
                         if isinstance(user, User):
                             flash(_("Created account!"), "success")
                             loggedIn, user = User.login(app,
@@ -353,8 +278,6 @@ class User(Model):
                                 return redirect(url_for('userHome'), 301)
                             else:
                                 return redirect(url_for('login'))
-                    else:
-                        errors = user.errors
                 else:  # Bad nonce, reload
                     return redirect(url_for('userSignup'))
             return User.renderSignUp(nonce, f, errors)
@@ -366,24 +289,27 @@ class User(Model):
             if "user" in session:
                 user: User or None = session["user"]
                 if isinstance(user, User):
-                    location = Location.findOne({"_id": user.location})
+                    location: Location = Location.object({"_id": user.location})
                     nonce = user.getNonce()
                     if request.method == "POST":
                         f = MultiDict(request.form.items(multi=True))
                         if f.get("nonce") == nonce:
                             user.delNonce()
-                            user.apply(f)
-                            if user.valid():
+                            for key, value in f.items(multi=True):
+                                user[key] = value
+                            try:
+                                user.validate()
+                            except ValidationError as err:
+                                errors[err.field_name] = err.message
+                            else:
                                 user.save()
                                 flash(_("Applied %s!" %
                                         user.firstName), "success")
-                            else:
-                                errors = user.errors
                         else:
                             return redirect(url_for('userEdit'))
                     else:
-                        f = user.filter(user)
-                        f["location"] = location.filter(user)
+                        f = user.to_json()
+                        f["location"] = location.to_json()
                     return user.renderEdit(nonce, f, errors)
             return redirect(url_for('login'))
 
