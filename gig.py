@@ -51,7 +51,7 @@ class Gig(me.Document):
             user: User or None = None
             if "user" in session:
                 user = session["user"]
-            gig = Gig.object({"_id": id})
+            gig = Gig.objects(_id=id).first()
             if gig is None:
                 return redirect(url_for('indexGET'))
             return Gig.renderPage(user, gig)
@@ -65,7 +65,7 @@ class Gig(me.Document):
                 user: User or None = session["user"]
                 if isinstance(user, User):
                     nonce = user.getNonce()
-                    gig: Gig or None = Gig.object({"_id": id, "owners": user.id})
+                    gig: Gig or None = Gig.objects(_id=id, owners=user.id).first()
                     if gig is None:
                         return redirect(url_for('listGig'))
                     if request.method == "POST":
@@ -83,7 +83,7 @@ class Gig(me.Document):
                             else:
                                 gig.save()
                     return Gig.renderEdit(user, nonce, gig, f, errors)
-            return redirect(url_for('login'))
+            return redirect(url_for("userLogin"))
 
         @app.route("/gig/list")
         def listGigJSON():
@@ -91,7 +91,7 @@ class Gig(me.Document):
                 user = session["user"]
                 if user:
                     return Gig.renderList(user)
-            return redirect(url_for('login'))
+            return redirect(url_for("userLogin"))
 
         @app.route("/gig/list.json")
         def listGig():
@@ -108,12 +108,12 @@ class Gig(me.Document):
                         skip = int(request.args["offset"])
                     if "search" in request.args and request.args["search"] != "":
                         text = request.args["search"]
-                    gigs.objects({"owners": user.id}).limit(limit).skip(0)
+                    gigs.objects(owners=user.id).limit(limit).skip(0)
                     resp = {}
                     resp["total"] = len(gigs)
                     resp["rows"] = gigs
                     return resp, 200
-            return redirect(url_for('login')), 401
+            return redirect(url_for("userLogin")), 401
 
         @app.route("/gig/delete")
         def deleteGig():
@@ -123,7 +123,7 @@ class Gig(me.Document):
                 if isinstance(user, User):
                     nonce = user.getNonce()
                     items = request.args["items"]
-                    gigs: List[Gig] = Gig.objects({"_id": items, "owners": user.id})
+                    gigs: List[Gig] = Gig.objects(_id=items, owners=user.id)
                     if request.method == "POST":
                         if request.form["nonce"] != nonce:
                             flash(_("Bad nonce!"), "danger")
@@ -138,7 +138,7 @@ class Gig(me.Document):
                                 flash(_("Removed item!"), "success")
                             return redirect(url_for('listGig'))
                     return Gig.renderDelete(user, nonce, gigs)
-            return redirect(url_for('login'))
+            return redirect(url_for("userLogin"))
 
         @app.route('/gig/new', methods=['POST', 'GET'])
         def newGig():
@@ -162,4 +162,4 @@ class Gig(me.Document):
                         flash(_("Bad nonce!"), "danger")
                 f["nonce"] = nonce
                 return Gig.renderNew(user, f, errors), 200
-            return redirect(url_for('login'))
+            return redirect(url_for("userLogin"))

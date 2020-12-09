@@ -1,98 +1,26 @@
 from copy import Error
+from forms.unregister import UnregisterForm
+from forms.login import LoginForm
 from location import Location
-from dateutil import relativedelta
 from flask import Flask
 from mongoengine import *
-from re import U
 from time import time
-from password_strength.tests import Length, NonLetters, Numbers, Special, Uppercase
-from werkzeug.datastructures import MultiDict
 from flask import render_template, request, session, redirect, url_for, flash
 from crypt import crypt
-from password_strength import PasswordPolicy
 from datetime import *
 from dateutil.parser import *
 from flask_babel import gettext as _
 from typing import *
 import mongoengine as me
 from langs import LANGS
+from pymongo.collection import ObjectId
 
-passwordMinLength = 8
-passwordMinUpperCaser = 1
-passwordMinNumbers = 1
-passwordMinSpecial = 1
-passwordMinNon = 1
+from forms.user import UserForm, UserEditForm, UserRegisterForm
+from forms.unregister import UnregisterForm
+from forms.login import LoginForm
 
-MissingPassword = Error(_("Missing password!"))
-MissingBirthday = Error(_("Missing birthday!"))
-MissingPhone = Error(_("Missing phone!"))
-MissingFirstName = Error(_("Missing first name!"))
-
-InvalidPasswordLength = Error(
-    _("Password is too short (expected %i)!" % passwordMinLength))
-InvalidPasswordUpper = Error(
-    _("Password is missing uppercase letters (expected %i)!" % passwordMinUpperCaser))
-InvalidPasswordNumbers = Error(
-    _("Password is missing numbers (expected %i)!" % passwordMinNumbers))
-InvalidPasswordSpecial = Error(
-    _("Password is missing special characters (expected %i)!" % passwordMinSpecial))
-InvalidPasswordNon = Error(
-    _("Password is missing non-letter characters (expected %i)!" % passwordMinNon))
-
-InvalidBirthday = Error(_("Invalid birthday!"))
-InvalidPhone = Error(_("Invalid international phone number"))
-
-BadCredentials = Error(_("Bad login credentials"))
-BadNonce = Error(_("Bad nonce!"))
-
-passPolicy = PasswordPolicy.from_names(
-    length=passwordMinLength,  # min length: 8
-    uppercase=passwordMinUpperCaser,  # need min. 2 uppercase letters
-    numbers=passwordMinNumbers,  # need min. 2 digits
-    special=passwordMinSpecial,  # need min. 2 special characters
-    # need min. 2 non-letter characters (digits, specials, anything)
-    nonletters=passwordMinNon,
-)
 
 class User(me.Document):
-    def testPassword(value: Any):
-        if not isinstance(value, str):
-            raise(MissingPassword)
-        else:
-            errs = passPolicy.test(value)
-            for err in errs:
-                if isinstance(err, Length):
-                    raise(InvalidPasswordLength)
-                elif isinstance(err, Uppercase):
-                    raise(InvalidPasswordUpper)
-                elif isinstance(err, Numbers):
-                    raise(InvalidPasswordNumbers)
-                elif isinstance(err, Special):
-                    raise(InvalidPasswordSpecial)
-                elif isinstance(err, NonLetters):
-                    raise(InvalidPasswordSpecial)
-
-    def testBirthday(value: Any):
-        bdTime = None
-        if not isinstance(value, (str, int, float, datetime)):
-            raise(MissingBirthday)
-        elif isinstance(value, str):
-            bdTime = isoparse(value)
-        elif isinstance(value, datetime):
-            bdTime = value
-        elif isinstance(value, float or int):
-            bdTime = datetime.fromtimestamp(value)
-        bdMin = datetime.now()+relativedelta(years=-18)
-        if bdMin < bdTime:
-            raise(InvalidBirthday)
-
-    def testPhone(value: Any):
-        # TODO: Parse phone number
-        if not isinstance(value, str):
-            raise(MissingPhone)
-        if value.count("+") != 1:
-            raise(InvalidPhone)
-
     admin = me.BooleanField(default=False)
     userType = me.StringField(required=True, choices=[
         "patron",
@@ -105,16 +33,19 @@ class User(me.Document):
         "all"
     ])
     email = me.EmailField(required=True, unique=True, allow_utf8_user=True)
-    password = me.StringField(required=True, validation=testPassword)
+    password = me.StringField(
+        required=True, validation=UserForm.validate_password)
     salt = me.StringField(default=None)
-    phone = me.StringField(required=True, unique=True, validation=testPhone)
-    birthday = me.DateField(required=True, validation=testBirthday)
+    phone = me.StringField(required=True, unique=True,
+                           validation=UserForm.validate_phone)
+    birthday = me.DateField(
+        required=True, validation=UserForm.validate_birthday)
     lang = me.StringField(default="en", choices=list(LANGS.keys()))
     firstName = me.StringField(required=True)
     middleName = me.StringField()
     lastName = me.StringField(required=True)
     location = me.LazyReferenceField(
-        "Location", passthrough=True, reverse_delete_rule=me.CASCADE)
+        "Location", dbref=ObjectId, passthrough=True, reverse_delete_rule=me.CASCADE)
     pronouns = me.StringField(
         default="they/them", choices=["they/them", "she/her", "he/him", "ve/ver", "xe/xer", "ze/hir"])
     gender = me.StringField(default="", choices=[
@@ -130,178 +61,201 @@ class User(me.Document):
          }
     ]}
 
-    def login(app: Flask, form: Dict = {}):
-        email = form.get("email", "")
-        password = form.get("password", "")
-        rememberMe = form.get("rememberMe", False)
-        user: User or None = User.object({"email": email})
-        if isinstance(user, User):
-            hash = crypt(password, user.salt)
+
+def login(app: Flask, form: LoginForm or UserForm):
+    if form.validate():
+        user: User = User.objects(email=form.email.data).first()
+        if user is not None:
+            hash = crypt(form.password.data, user.salt)
             if hash == user.password:
-                if rememberMe:
-                    session.permanent = True
-                session["agent"] = request.user_agent
+                session.permanent = form["rememberMe"].data or False
+                session["agent"] = request.user_agent.string
                 session["remote"] = request.remote_user
                 session["user"] = user
-                session["expires"] = date.today(
-                ) + app.permanent_session_lifetime
-                session["created"] = time()
+                session["expires"] = (date.today(
+                ) + app.permanent_session_lifetime).isoformat()
+                session["created"] = (date.today()).isoformat()
                 return True, user
-        return False, None
+    return False, None
 
-    def renderLogin(nonce: str, error: Any):
-        return render_template("userLogin.html.j2", error=error, nonce=nonce)
 
-    def renderHome(self):
-        return render_template("userHome.html.j2", user=self)
+def renderLogin(form: LoginForm):
+    return render_template("userLogin.html.j2", form=form)
 
-    def renderEdit(self, nonce: str, form: Any, errors: list):
-        return render_template("userEdit.html.j2", user=self, nonce=nonce, filled=form, errors=errors)
 
-    def renderDelete(self, nonce: str):
-        return render_template("userDelete.html.j2", user=self, nonce=nonce)
+def renderHome(self: User):
+    return render_template("userHome.html.j2", user=self)
 
-    def renderCard(self):
-        return render_template("userCard.html.j2", user=self)
 
-    def renderPage(self):
-        return render_template("userPage.html.j2", user=self)
+def renderEdit(self: User, form: UserEditForm):
+    return render_template("userEdit.html.j2", user=self, form=form, edit=True)
 
-    def renderSignUp(nonce: str, form: dict, errors: dict):
-        return render_template("userSignup.html.j2", nonce=nonce, filled=form, errors=errors)
 
-    def register(form: Dict):
-        user = User(form)
-        user.validate()
+def renderDelete(self: User, form: UnregisterForm):
+    return render_template("userDelete.html.j2", user=self, form=form)
+
+
+def renderCard(self: User):
+    return render_template("userCard.html.j2", user=self)
+
+
+def renderPage(self: User):
+    return render_template("userPage.html.j2", user=self)
+
+
+def renderSignUp(form: UserRegisterForm):
+    return render_template("userSignup.html.j2", form=form)
+
+def edit(self: User, location: Location, form: UserEditForm):
+    if form.password.data != "":
         salt = crypt(str(time()))
-        hash = crypt(form["password"], salt)
-        user.password = hash
-        user.salt = salt
+        hash = crypt(form.password.data, salt)
+        self.password = hash
+        self.salt = salt
+    else:
+        form.password.data = self.password
+    self.userType = form.userType.data
+    self.firstName = form.firstName.data
+    self.middleName = form.middleName.data
+    self.lastName = form.lastName.data
+    self.email = form.email.data
+    self.phone = form.phone.data
+    self.birthday = form.birthday.data
+    self.lang = form.lang.data
+    self.pronouns = form.pronouns.data
+    self.gender = form.gender.data
+    self.icon = form.icon.data
+    self.info = form.info.data
+
+    location.edit(form.location.form)
+
+    self.validate()
+    return self
+
+
+def register(form: UserForm):
+    errors = form.validate()
+    if not errors:
+        location = Location.register(form.location.form)
+
+        salt = crypt(str(time()))
+        hash = crypt(form.password.data, salt)
+        user = User(
+            id=form.id.data,
+            email=form.email.data,
+            phone=form.phone.data,
+            birthday=form.birthday.data,
+            lang=form.lang.data,
+            firstName=form.firstName.data,
+            middleName=form.middleName.data,
+            lastName=form.lastName.data,
+            location=location.id,
+            pronouns=form.pronouns.data,
+            gender=form.gender.data,
+            userType=form.userType.data,
+            salt=salt,
+            password=hash,
+            # icon=form.icon.data,
+            # info=form.info.data
+        )
+        user.validate()
+
         return user.save()
+    return None
 
-    def delNonce(_self=None):
-        del session["nonce"]
 
-    def setNonce(_self=None, salt=None):
-        nonce = crypt(str(time()), salt)
-        session["nonce"] = nonce
+def setupApp(app: Flask):
+    @app.route("/home")
+    def userHome():
+        if "user" in session:
+            user = session["user"]
+            if user:
+                return user.renderHome()
+        return redirect(url_for('userLogin'))
 
-    def getNonce(_self=None) -> str:
-        nonce = None
-        if session:
-            if "nonce" in session:
-                nonce = session["nonce"]
-            if nonce == None:
-                nonce = crypt(str(time()))
-                session["nonce"] = nonce
-        return nonce
+    @app.route("/delete", methods=["POST", "GET"])
+    def userDelete():
+        f = UnregisterForm(request.form)
+        if "user" in session:
+            user: User or None = session["user"]
+            if isinstance(user, User):
+                if request.method == "POST":
+                    if f.validate():
+                        done = user.delete()
+                        if done:
+                            flash(_("Account deleted, Goodbye, %s!" %
+                                    user.firstName), "primary")
+                            return redirect(url_for('userSignup'))
+                return user.renderDelete(f)
+        return redirect(url_for("userLogin"))
 
-    def setupApp(app: Flask):
-        @app.route("/home")
-        def userHome():
-            if "user" in session:
-                user = session["user"]
-                if user:
-                    return user.renderHome()
-            return redirect(url_for('userLogin'))
+    @app.route('/login', methods=['POST', 'GET'])
+    def userLogin():
+        f = LoginForm(request.form)
+        if request.method == "POST":
+            try:
+                loggedIn, user = login(app, f)
+            except me.ValidationError:
+                flash(_("Please fill everything required."), "danger")
+            else:
+                if loggedIn:
+                    flash(_("Welcome %s!" % user.firstName), "success")
+                    return redirect(url_for('userHome'), 301)
+                else:
+                    flash(_("Bad login credentials"), "danger")
+        return renderLogin(f)
 
-        @app.route("/delete", methods=["POST", "GET"])
-        def userDelete():
-            if "user" in session:
-                user: User or None = session["user"]
+    @app.route('/sign-up', methods=['POST', 'GET'])
+    def userSignup():
+        f = UserRegisterForm(request.form)
+        if request.method == "POST":
+            try:
+                user = register(f)
+            except me.ValidationError as err:
+                flash(_("Please fill everything required."), "danger")
+            else:
                 if isinstance(user, User):
-                    nonce = user.getNonce()
-                    if request.method == "POST":
-                        if nonce == request.form.get("nonce"):
-                            user.delNonce()
-                            done = user.delete()
-                            if done:
-                                flash(_("Account deleted, Goodbye, %s!" %
-                                        user.firstName), "primary")
-                                return redirect(url_for('userSignup'))
-                        else:
-                            flash(_("Bad nonce!"), "danger")
-                    return user.renderDelete(nonce)
-            return redirect(url_for('login'))
-
-        @app.route('/login', methods=['POST', 'GET'])
-        def userLogin():
-            error = None
-            nonce = User.getNonce()
-            if request.method == "POST":
-                f = MultiDict(request.form.items(multi=True))
-                if f.get("nonce") == nonce:
-                    User.delNonce()
-                    loggedIn, user = User.login(app, f)
+                    flash(_("Created account!"), "success")
+                    loggedIn, user = login(app, f)
                     if loggedIn:
-                        flash(_("Welcome %s!" % user.firstName), "success")
+                        flash(_("Welcome %s!" %
+                                user.firstName), "success")
                         return redirect(url_for('userHome'), 301)
                     else:
-                        error = BadCredentials
-                else:
-                    error = BadNonce
-            flash(error, "danger")
-            return User.renderLogin(nonce, error)
+                        return redirect(url_for('userLogin'))
+        return User.renderSignUp(f)
 
-        @app.route('/sign-up', methods=['POST', 'GET'])
-        def userSignup():
-            f = {}
-            nonce = User.getNonce()
-            errors = {}
-            if request.method == "POST":
-                f = MultiDict(request.form.items(multi=True))
-                if f.get("nonce") == nonce:
-                    User.delNonce()
+    @app.route('/options', methods=['POST', 'GET'])
+    def userEdit():
+        if "user" in session:
+            user: User or None = session["user"]
+            if isinstance(user, User):
+                location: Location = Location.objects(
+                    id=user.location.id).first()
+                f = UserEditForm(request.form, user)
+                if request.method == "POST":
                     try:
-                        user = User.register(f)
-                    except me.ValidationError as err:
-                        errors[err.field_name] = err.message
+                        user.edit(location, f)
+                    except me.ValidationError:
+                        flash(
+                            _("Please correctly fill everything required."), "danger")
                     else:
-                        if isinstance(user, User):
-                            flash(_("Created account!"), "success")
-                            loggedIn, user = User.login(app,
-                                                        f["email"], f["password"], False)
-                            if loggedIn:
-                                flash(_("Welcome %s!" %
-                                        user.firstName), "success")
-                                return redirect(url_for('userHome'), 301)
-                            else:
-                                return redirect(url_for('login'))
-                else:  # Bad nonce, reload
-                    return redirect(url_for('userSignup'))
-            return User.renderSignUp(nonce, f, errors)
-
-        @app.route('/options', methods=['POST', 'GET'])
-        def userEdit():
-            f = {}
-            errors = {}
-            if "user" in session:
-                user: User or None = session["user"]
-                if isinstance(user, User):
-                    location: Location = Location.object({"_id": user.location})
-                    nonce = user.getNonce()
-                    if request.method == "POST":
-                        f = MultiDict(request.form.items(multi=True))
-                        if f.get("nonce") == nonce:
-                            user.delNonce()
-                            for key, value in f.items(multi=True):
-                                user[key] = value
-                            try:
-                                user.validate()
-                            except me.ValidationError as err:
-                                errors[err.field_name] = err.message
-                            else:
-                                user.save()
-                                flash(_("Applied %s!" %
-                                        user.firstName), "success")
-                        else:
-                            return redirect(url_for('userEdit'))
-                    else:
-                        f = user.to_json()
-                        f["location"] = location.to_json()
-                    return user.renderEdit(nonce, f, errors)
-            return redirect(url_for('login'))
+                        location.save()
+                        user.save()
+                        flash(_("Applied %s!" %
+                                user.firstName), "success")
+                return user.renderEdit(f)
+        return redirect(url_for("userLogin"))
 
 
-User.passwordPolicy = passPolicy
-User.nonce = property(User.getNonce, User.setNonce, User.delNonce)
+User.login = login
+User.renderLogin = renderLogin
+User.renderHome = renderHome
+User.renderEdit = renderEdit
+User.renderDelete = renderDelete
+User.renderCard = renderCard
+User.renderPage = renderPage
+User.renderSignUp = renderSignUp
+User.register = register
+User.edit = edit
+User.setupApp = setupApp

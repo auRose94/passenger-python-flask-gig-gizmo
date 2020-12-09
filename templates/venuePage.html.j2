@@ -1,5 +1,28 @@
-{% extends 'base.html.j2' %} {% block header %}
-<h1>{% block title %}GigGizmo{% endblock %}</h1>
-{% endblock %} {% block content %}
-<p>Hello World!</p>
+{% extends 'base.html.j2' %} 
+{% block header %}
+<h1 class="d-flex">
+    <span class="d-flex">
+    {% block title %}
+        {{ venue.name }}
+    {% endblock %}
+    </span>
+    <div class="ml-auto d-flex">
+        {% if venue.email %}
+        <a class="mx-1" href="mailto:{{ venue.email }}">
+            <i class="fas fa-at"></i>
+        </a>
+        {% endif %}
+        {% if venue.url %}
+        <a class="mx-1" href="{{ venue.url }}">
+            <i class="fas fa-globe"></i>
+        </a>
+        {% endif %}
+    </div>
+</h1>
+{% endblock %} 
+
+{% block content %}
+<section>
+    {{ venue.desc }}
+</section>
 {% endblock %}

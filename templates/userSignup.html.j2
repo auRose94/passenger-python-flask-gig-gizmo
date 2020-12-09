@@ -15,5 +15,5 @@
   filling out this form and signing up, you are accepting to our
   terms of service and privacy policy.
 </p>
-{{ getUserForm(nonce, filled, errors)|safe }}
+{% include 'userForm.html.j2' %}
 {% endblock %}

@@ -1,13 +1,74 @@
-
-{% for error in errors %}
-<div class="alert alert-danger" role="alert">{{ error }}</div>
-{% endfor %}
+{% from "formFieldBootstrap.html.j2" import render_field with context %}
 
 <form method="post">
+  {{ form.csrf_token }}
   <div class="form-row">
+    <div class="form-group col-md-4">
+      {{ render_field(form.name) }}
+    </div>
+    <div class="form-group col-md-4">
+      {{ render_field(form.email) }}
+    </div>
+    <div class="form-group col-md-4">
+      {{ render_field(form.phone) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-6">
+      {{ render_field(form.perma) }} 
+    </div>
+    <div class="form-group col-md-6">
+      {{ render_field(form.url) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-4">
+      {{ render_field(form.location.address1) }}
+    </div>
+    <div class="form-group col-md-4">
+      {{ render_field(form.location.address2) }}
+    </div>
+    <div class="form-group col-md-4">
+      {{ render_field(form.location.country) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-4">
+      {{ render_field(form.location.state) }}
+    </div>
     <div class="form-group col-md-5">
-      <label for="name">Name</label>
-      <input type="text" class="form-control" name="name" id="name" required>
+      {{ render_field(form.location.city) }}
+    </div>
+    <div class="form-group col-md-3">
+      {{ render_field(form.location.zip) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.tags) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.short, cols="128", rows="3", maxlength="384") }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.desc, rows="5", maxlength="512000000") }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.icon, with_label=True) }}
+    </div>
+    <div class="form-group col-md-9">
+      {{ render_field(form.photos, with_label=True) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.hide) }}
     </div>
   </div>
   <input type="submit" value="Create Band" class="btn btn-primary">

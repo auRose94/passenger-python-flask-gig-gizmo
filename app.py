@@ -9,12 +9,10 @@ from venue import Venue
 from location import Location
 from gig import Gig
 from api import API
-from flask_session import Session
 from flask_babel import format_timedelta, format_date, format_datetime, format_time, Babel, gettext as _
 from config import dev, env
 from langs import LANGS
-from userForm import UserForm
-from flask_mongoengine import MongoEngine
+from flask_mongoengine import MongoEngine, MongoEngineSessionInterface, json
 
 SESSION_TYPE = "mongodb"
 SESSION_MONGODB_DB = "GigGizmo"
@@ -27,9 +25,10 @@ app.config['MONGODB_SETTINGS'] = {
 app.config.from_object(__name__)
 app.secret_key = b'`\xae\xa8\xfdt\x8e["\xa3U\xd4\xcb\xff=o\x8d'
 app.templates_auto_reload = True
-Session(app)
 babel = Babel(app)
 db = MongoEngine(app)
+app.session_interface = MongoEngineSessionInterface(db)
+json.override_json_encoder(app)
 
 app.env = env
 
@@ -127,17 +126,6 @@ def getLanguages():
 def getCountries():
     lang = session.get('lang', 'en')
     return countries_for_language(lang)
-
-@app.template_global()
-def getUserForm(nonce, filled, errors):
-    return UserForm(nonce, filled, errors).render()
-    
-db.register(User)
-db.register(Band)
-db.register(Venue)
-db.register(Gig)
-db.register(Location)
-db.register(API)
 
 @app.route("/")
 def indexGET():

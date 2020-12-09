@@ -1,5 +1,9 @@
-{% extends 'base.html.j2' %} {% block header %}
+{% extends 'base.html.j2' %} 
+
+{% block header %}
 <h1>{% block title %}Options{% endblock %}</h1>
-{% endblock %} {% block content %}
-{{ getUserForm(nonce, filled, errors)|safe }}
+{% endblock %} 
+
+{% block content %}
+{% include 'userForm.html.j2' %}
 {% endblock %}

@@ -1,126 +1,90 @@
-
-{% for error in errors %}
-<div class="alert alert-danger" role="alert">{{ error }}</div>
-{% endfor %}
+{% from "formFieldBootstrap.html.j2" import render_field with context %}
 
 <form method="post">
-  <input type="hidden" name="nonce" value="{{form['nonce']}}">
+  {{ form.csrf_token }}
   <div class="form-row">
     <div class="form-group col-md-6">
-      <label for="lang">Language</label>
-      <select value="{{form['lang']}}" type="text" class="form-control" name="lang" id="lang" required autocomplete="language">
-        {% for (key, lang) in getLanguages() %}
-        <option value="{{lang.code}}" {% if form['lang'] == lang.code or lang.code == "en" and not form['lang'] %} selected="true" {% endif %}>
-          {{lang.name}} ({{lang.enName}})
-        </option>
-        {% endfor %}
-      </select>
+        {{ render_field(form.lang, autocomplete="language") }}
     </div>
     <div class="form-group col-md-6">
-      <label for="country">Country</label>
-      <select value="{{form['location.country']}}" type="text" class="form-control" name="location.country" id="country" required autocomplete="country">
-        {% for (code, country) in getCountries() %}
-        <option value="{{code}}" {% if form['location.country'] == code or code == "US" and not form['location.country'] %} selected="true" {% endif %}>{{country}}</option>
-        {% endfor%}
-      </select>
+      {{ render_field(form.location.country, autocomplete="country") }}
     </div>
   </div>
   <div class="form-row">
     <div class="form-group col-md-4">
-      <label for="email">Email</label>
-      <input value="{{form['email']}}" type="email" class="form-control" name="email" id="email" required autocomplete="email">
+      {{ render_field(form.email, autocomplete="email") }}
     </div>
     <div class="form-group col-md-4">
-      <label for="phone">Phone</label>
-      <input value="{{form['phone']}}" type="tel" class="form-control" name="phone" id="phone" required autocomplete="tel">
+      {{ render_field(form.phone, autocomplete="tel") }}
     </div>
     <div class="form-group col-md-4">
-      <label for="birthday">Birthday</label>
-      <input value="{{form['birthday']}}" type="date" class="form-control" name="birthday" id="birthday" required autocomplete="bday">
+      {{ render_field(form.birthday, autocomplete="bday") }}
     </div>
   </div>
   <div class="form-row">
     <div class="form-group col-md-6">
-      <label for="password">Password</label>
-      <input value="{{form['password']}}" class="form-control" type="password" name="password" id="password" required autocomplete="new-password">
+      {{ render_field(form.password, autocomplete="new-password") }}
     </div>
     <div class="form-group col-md-6">
-      <label for="confPassword">Confirm</label>
-      <input value="{{form['confPassword']}}" class="form-control" type="password" id="confPassword" required autocomplete="new-password">
+      {{ render_field(form.confPassword, autocomplete="new-password") }}
     </div>
   </div>
   <div class="form-row">
     <div class="form-group col-md-5">
-      <label for="firstName">First Name</label>
-      <input value="{{form['firstName']}}" type="text" class="form-control" name="firstName" id="firstName" required autocomplete="given-name">
+      {{ render_field(form.firstName, autocomplete="given-name") }}
     </div>
     <div class="form-group col-md-2">
-      <label for="middleName">Middle Name</label>
-      <input value="{{form['middleName']}}" type="text" class="form-control" name="middleName" id="middleName" autocomplete="additional-name">
+      {{ render_field(form.middleName, autocomplete="additional-name") }}
     </div>
-    <div class="form-group col-md-5">
-      <label for="lastName">Last Name</label>
-      <input value="{{form['lastName']}}" type="text" class="form-control" name="lastName" id="lastName" required autocomplete="family-name">
+    <div class="form-group col-md-5">      
+      {{ render_field(form.lastName, autocomplete="family-name") }}
     </div>
   </div>
   <div class="form-row">
-    <div class="form-group col-md-6">
-      <label for="address1">Address 1</label>
-      <input value="{{form['location.address1']}}" type="text" class="form-control" name="location.address1" id="address1" required autocomplete="address-line1">
+    <div class="form-group col-md-6">      
+      {{ render_field(form.location.address1, autocomplete="address-line1") }}
     </div>
-    <div class="form-group col-md-6">
-      <label for="address2">Address 2</label>
-      <input value="{{form['location.address2']}}" type="text" class="form-control" name="location.address2" id="address2" autocomplete="address-line2">
+    <div class="form-group col-md-6">      
+      {{ render_field(form.location.address2, autocomplete="address-line2") }}
     </div>
   </div>
   <div class="form-row">
-    <div class="form-group col-md-4">
-      <label for="state">State/Province/Region</label>
-      <input value="{{form['location.state']}}" type="text" class="form-control" name="location.state" id="state" required autocomplete="address-level1">
+    <div class="form-group col-md-4">      
+      {{ render_field(form.location.state, autocomplete="address-level1") }}
     </div>
-    <div class="form-group col-md-5">
-      <label for="city">City</label>
-      <input value="{{form['location.city']}}" type="text" class="form-control" name="location.city" id="city" required autocomplete="address-level2">
+    <div class="form-group col-md-5">      
+      {{ render_field(form.location.city, autocomplete="address-level2") }}
     </div>
-    <div class="form-group col-md-3">
-      <label for="zip">Postal/ZIP</label>
-      <input value="{{form['location.zip']}}" type="text" class="form-control" name="location.zip" id="zip" required autocomplete="postal-code">
+    <div class="form-group col-md-3">   
+      {{ render_field(form.location.zip, autocomplete="postal-code") }}
     </div>
   </div>
   <div class="form-row">
-    <div class="form-group col-md-4">
-      <label for="userType">Using GigGizmo As?</label>
-      <select value="{{form['userType']}}" class="form-control" name="userType" id="userType">
-        <option {% if form['userType'] == "patron"%}selected{% endif %} value="patron">Patron</option>
-        <option {% if form['userType'] == "musician"%}selected{% endif %} value="musician">Musician</option>
-        <option {% if form['userType'] == "bandMember"%}selected{% endif %} value="bandMember">Band Member</option>
-        <option {% if form['userType'] == "bandManager"%}selected{% endif %} value="bandManager">Band Manager</option>
-        <option {% if form['userType'] == "venueOwner"%}selected{% endif %} value="venueOwner">Venue Owner</option>
-        <option {% if form['userType'] == "venueManager"%}selected{% endif %} value="venueManager">Venue Manager</option>
-        <option {% if form['userType'] == "marketing"%}selected{% endif %} value="marketing">Marketing Consultant</option>
-        <option {% if form['userType'] == "all"%}selected{% endif %} value="all">All</option>
-      </select>
+    <div class="form-group col-md-4">   
+      {{ render_field(form.userType) }}
     </div>
-    <div class="form-group col-md-4">
-      <label for="pronouns">Pronouns</label>
-      <select value="{{form['pronouns']}}" type="text" class="form-control" name="pronouns" id="pronouns">
-        <option {% if form['pronouns'] == "they/them"%}selected{% endif %} value="they/them">They/Them/Their</option>
-        <option {% if form['pronouns'] == "she/her"%}selected{% endif %} value="she/her">She/Her</option>
-        <option {% if form['pronouns'] == "he/him"%}selected{% endif %} value="he/him">He/Him/His</option>
-        <option {% if form['pronouns'] == "ve/ver"%}selected{% endif %} value="ve/ver">Ve/Ver/Vis</option>
-        <option {% if form['pronouns'] == "xe/xer"%}selected{% endif %} value="xe/xer">Xe/Xem/Xyr</option>
-        <option {% if form['pronouns'] == "ze/hir"%}selected{% endif %} value="ze/hir">Ze/hir</option>
-      </select>
+    <div class="form-group col-md-4">   
+      {{ render_field(form.pronouns) }}
     </div>
-    <div class="form-group col-md-4">
-      <label for="gender">Gender</label>
-      <select type="text" class="form-control" name="gender" id="gender">
-        <option {% if form['gender'] == ""%}selected{% endif %} value="">Not Specified</option>
-        <option {% if form['gender'] == "non-binary"%}selected{% endif %} value="non-binary">Non-Binary</option>
-        <option {% if form['gender'] == "female"%}selected{% endif %} value="female">Female</option>
-        <option {% if form['gender'] == "male"%}selected{% endif %} value="male">Male</option>
-      </select>
+    <div class="form-group col-md-4">  
+      {{ render_field(form.gender) }}
     </div>
   </div>
-  <input type="submit" value="Register" class="btn btn-primary">
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.info) }}
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group col-md-9">
+      {{ render_field(form.icon, with_label=True) }}
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary">
+    {% if edit == True %}
+      {{ _("Save") }}
+    {% else %}
+      {{ _("Register") }}
+    {% endif %}
+  </button>
 </form>

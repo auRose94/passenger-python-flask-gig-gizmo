@@ -1,14 +1,13 @@
 
 from flask.app import Flask
-from db import Model, Database, devListJSON, devSetResponse
 from flask import render_template, request, session, redirect, url_for, flash
-import os
 from datetime import *
 from dateutil.parser import *
 from dateutil.relativedelta import *
 from flask_babel import gettext as _
+from werkzeug.datastructures import MultiDict
 from user import User
-from copy import Error, error
+from copy import Error
 from typing import *
 import mongoengine as me
 
@@ -23,27 +22,17 @@ MissingSecret = Error(_("Missing secret string!"))
 InvalidUser = Error(_("Invalid user!"))
 InvalidIcon = Error(_("Invalid icon!"))
 
-class API(Model):
+class API(me.Document):
     name = me.StringField(required=True)
     live = me.BooleanField(default=False)
     email = me.EmailField(allow_utf8_user=True)
     website = me.URLField()
-    history = me.ListField(me.DynamicEmbeddedDocument())
-    stats = me.DynamicEmbeddedDocument()
+    history = me.ListField(me.DictField())
+    stats = me.DictField()
     secret = me.StringField()
     owners = me.ListField(me.ReferenceField("User", passthrough=True, reverse_delete_rule=me.NULLIFY))
     icon = me.ImageField(size=(1024, 1024, True),
                          thumbnail_size=(128, 128, True))
-                         
-    name = Model.newProp("name", None, testName, "Name of the App")
-    live = Model.newProp("live", False, testLive, "Should the API apply data?")
-    email = Model.newProp("email", None, testEmail, "Email of the dev")
-    website = Model.newProp("website", None, testWebsite, "Website of App")
-    history = Model.newProp("history", [], testHistory, "History of requests")
-    stats = Model.newProp("stats", [], testStats, "Stats for rates and info")
-    secret = Model.newProp("secret", None, testSecret, "Given to user")
-    user = Model.newProp("user", None, testUser, "HTML details on the event")
-    icon = Model.newProp("icon", None, testIcon, "Icon of the App")
 
     def renderCard(self):
         return render_template("apiCard.html.j2", api=self)
@@ -51,17 +40,17 @@ class API(Model):
     def renderDelete(user: User, apis: list, nonce: str):
         return render_template("apiDelete.html.j2", user=user, apis=apis, nonce=nonce)
 
-    def renderEdit(user: User, api: Any, form: Any, errors: list):
-        return render_template("apiEdit.html.j2", user=user, api=api, form=form, errors=errors)
+    def renderEdit(user: User, api: Any, nonce: str, form: Any, errors: list):
+        return render_template("apiEdit.html.j2", user=user, api=api, form=form, errors=errors, nonce=nonce)
 
-    def renderForm(user: User, form: Any, errors: list):
-        return render_template("apiForm.html.j2", user=user, form=form, errors=errors)
+    def renderForm(user: User, nonce: str, form: Any, errors: list):
+        return render_template("apiForm.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderList(user: User, apis: list):
         return render_template("apiList.html.j2", user=user, apis=apis)
 
-    def renderNew(user: User, form: Any, errors: list):
-        return render_template("apiNew.html.j2", user=user, form=form, errors=errors)
+    def renderNew(user: User, nonce: str, form: Any, errors: list):
+        return render_template("apiNew.html.j2", user=user, form=form, errors=errors, nonce=nonce)
 
     def renderPage(user: User, api: Any):
         return render_template("apiPage.html.j2", user=user, api=api)
@@ -69,10 +58,10 @@ class API(Model):
     def setupApp(app: Flask):
         @app.route("/api/<id>")
         def apiPage(id):
-            user = None
+            user: User or None = None
             if "user" in session:
                 user = session["user"]
-            api = API.findOne({"_id": id})
+            api = API.objects(_id=id).first()
             if api is None:
                 return redirect(url_for('indexGET'))
             return API.renderPage(user, api)
@@ -80,89 +69,107 @@ class API(Model):
         @app.route("/api/<id>/edit", methods=['POST', 'GET'])
         def editAPI(id):
             user = None
-            form = {}
-            errors = []
+            f = {}
+            errors = {}
             if "user" in session:
-                user = session["user"]
-                api = API.findOne({"_id": id, "owner": user.id})
-                if api is None:
-                    return redirect(url_for('listAPI'))
-                if request.method == "POST":
-                    form = request.form
-                    if form["nonce"] != user.nonce:
-                        flash(_("Bad nonce!"), "danger")
-                    else:
-                        del user.nonce
-                        api.apply(form)
-                        if len(api.errors) == 0:
-                            api.save()
+                user: User or None = session["user"]
+                if isinstance(user, User):
+                    nonce = user.getNonce()
+                    api: API or None = API.objects(_id=id, owners=user.id).first()
+                    if api is None:
+                        return redirect(url_for('listAPI'))
+                    if request.method == "POST":
+                        f = MultiDict(request.form.items(multi=True))
+                        for key, value in f.items(multi=True):
+                            user[key] = value
+                        if f["nonce"] != nonce:
+                            flash(_("Bad nonce!"), "danger")
                         else:
-                            errors.extend(api.errors)
-                form["nonce"] = user.nonce
-                return API.renderEdit(user, api, form, errors)
+                            user.delNonce()
+                            try:
+                                api.validate()
+                            except me.ValidationError as err:
+                                errors[err.field_name] = err.message
+                            else:
+                                api.save()
+                    return API.renderEdit(user, nonce, api, f, errors)
             return redirect(url_for('login'))
 
         @app.route("/api/list")
-        def listAPI():
-            if "user" in session:
-                user = session["user"]
-                if user:
-                    apis = API.findMany({"owner": user.id})
-                    return API.renderList(user, apis)
-            return redirect(url_for('login'))
-
-        @app.route("/api/list.json")
         def listAPIJSON():
             if "user" in session:
                 user = session["user"]
                 if user:
-                    return devListJSON(user, request, API, [Upload])
+                    return API.renderList(user)
+            return redirect(url_for('login'))
+
+        @app.route("/api/list.json")
+        def listAPI():
+            if "user" in session:
+                user = session["user"]
+                if user:
+                    apis: me.Document = API.select_related()
+                    limit = 0
+                    skip = 0
+                    text = None
+                    if "limit" in request.args and int(request.args["limit"]) > 0:
+                        limit = int(request.args["limit"])
+                    if "offset" in request.args and int(request.args["offset"]) > 0:
+                        skip = int(request.args["offset"])
+                    if "search" in request.args and request.args["search"] != "":
+                        text = request.args["search"]
+                    apis.objects(owners=user.id).limit(limit).skip(0)
+                    resp = {}
+                    resp["total"] = len(apis)
+                    resp["rows"] = apis
+                    return resp, 200
             return redirect(url_for('login')), 401
 
         @app.route("/api/delete")
         def deleteAPI():
             if "user" in session:
                 nonce = None
-                user = session["user"]
-                if user:
-                    nonce = user.nonce
+                user: User or None = session["user"]
+                if isinstance(user, User):
+                    nonce = user.getNonce()
                     items = request.args["items"]
-                    apis = API.findMany({"_id": items, "owner": user.id})
+                    apis: List[API] = API.objects(_id=items, owners=user.id)
                     if request.method == "POST":
                         if request.form["nonce"] != nonce:
                             flash(_("Bad nonce!"), "danger")
                         else:
-                            del user.nonce
+                            user.delNonce()
                             for api in apis:
-                                api.remove()
+                                api.delete()
                             l = len(apis)
                             if l > 1:
                                 flash(_("Removed %i items!" % l), "success")
                             else:
                                 flash(_("Removed item!"), "success")
                             return redirect(url_for('listAPI'))
-                    return API.renderDelete(user, apis, nonce)
+                    return API.renderDelete(user, nonce, apis)
             return redirect(url_for('login'))
 
         @app.route('/api/new', methods=['POST', 'GET'])
         def newAPI():
             if "user" in session:
-                user = session["user"]
-                nonce = user.nonce
+                user: User = session["user"]
+                nonce = user.getNonce()
                 errors = []
-                form = {}
+                f = {}
                 if request.method == "POST":
-                    form = request.form
-                    if form["nonce"] == nonce:
-                        api = API(form)
-                        if len(api.errors) == 0:
-                            api = API.register(api)
+                    f = MultiDict(request.form.items(multi=True))
+                    if f.get("nonce") == nonce:
+                        user.delNonce()
+                        try:
+                            api = API.register(f, user)
+                        except me.ValidationError as err:
+                            errors[err.field_name] = err.message
+                        else:
                             if api:
                                 return redirect(url_for('apiPage', id=api.id))
-                        else:
-                            errors.extend(api.errors)
                     else:
                         flash(_("Bad nonce!"), "danger")
-                form["nonce"] = nonce
-                return API.renderNew(user, form, errors)
+                f["nonce"] = nonce
+                return API.renderNew(user, f, errors), 200
             return redirect(url_for('login'))
